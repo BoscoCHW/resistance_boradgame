@@ -7,7 +7,7 @@ import Config
 # Run `mix help test` for more information.
 config :resistance, Resistance.Repo,
   username: "postgres",
-  password: "Zlimes321",
+  password: "postgres",
   hostname: "localhost",
   database: "resistance_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
