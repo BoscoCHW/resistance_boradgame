@@ -3,7 +3,7 @@ import Config
 # Configure your database
 config :resistance, Resistance.Repo,
   username: "postgres",
-  password: "postgres",
+  password: "Zlimes321",
   hostname: "localhost",
   database: "resistance_dev",
   stacktrace: true,
