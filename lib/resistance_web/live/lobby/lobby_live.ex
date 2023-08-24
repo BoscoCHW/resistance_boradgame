@@ -3,7 +3,8 @@ defmodule ResistanceWeb.LobbyLive do
   require Logger
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(%{"id" => id}, session, socket) do
+    IO.puts(id)
     init_state = socket
       |> assign(:self, session["_csrf_token"])
       |> assign(:players, %{})
@@ -15,14 +16,14 @@ defmodule ResistanceWeb.LobbyLive do
   end
 
   @impl true
-  def handle_params(_params, _url, %{assigns: %{self: self} } = socket) do
+  def handle_params({"id" => id}, _url, %{assigns: %{self: self} } = socket) do
     cond do
-      GenServer.whereis(Game.Server) != nil && Game.Server.is_player(self) ->
-        {:noreply, push_navigate(socket , to: "/game")}
-      !Pregame.Server.is_player(self) ->
-        {:noreply, push_navigate(socket, to: "/")}
+      # GenServer.whereis(Game.Server) != nil && Game.Server.is_player(self) ->
+      #   {:noreply, push_navigate(socket , to: "/game")}
+      # !Pregame.Server.is_player(self) ->
+      #   {:noreply, push_navigate(socket, to: "/")}
       true ->
-        Pregame.Server.subscribe()
+        Pregame.Server.subscribe(id)
         {:noreply, socket |> assign(:players, Pregame.Server.get_players)}
     end
   end

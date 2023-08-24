@@ -18,13 +18,15 @@ defmodule Resistance.Application do
       {Finch, name: Resistance.Finch},
       # Start the Endpoint (http/https)
       ResistanceWeb.Endpoint,
-      Pregame.Server
+      Avalon.Supervisor,
+      {Registry, [name: AvalonRegistry, keys: :unique]},
       # Start a worker by calling: Resistance.Worker.start_link(arg)
       # {Resistance.Worker, arg}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
+    :ets.new(:pregame_states, [:named_table, :public])
     opts = [strategy: :one_for_one, name: Resistance.Supervisor]
     Supervisor.start_link(children, opts)
   end

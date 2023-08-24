@@ -54,7 +54,10 @@
                         alt="Avatar" />
                 </div>
                 <span class="name">
-                    <%= n %>
+                    <%= {name, _} = Map.get(@players, @self)
+                        if name == n do n <> " (you)"
+                        else n end
+                    %>
                 </span>
             </div>
         <% end) %>

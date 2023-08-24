@@ -21,45 +21,17 @@
         </div>
 
         <div class="btn-group">
-            <.button phx-click={show_modal("play_modal")}>Play</.button>
+            <.button phx-click="create_room">Create Room</.button>
             <.button phx-click={show_modal("help_modal")}>Help</.button>
             <.button phx-click={show_modal("credits_modal")}>Credits</.button>
         </div>
     </div>
 
-    <.modal id="play_modal">
-        <:title>
-            Who goes there?
-        </:title>
-        <.simple_form for={@form} phx-change="validate" phx-submit="join">
-            <.input
-                field={@form[:name]}
-                label="Enter your name"
-                placeholder="Ser Ulrich von Liechtenstein"/>
-            <:actions>
-                <.button>Join Lobby</.button>
-            </:actions>
-        </.simple_form>
-    </.modal>
+    
 
     <.help_modal />
 
     <.credits_modal />
-
-    <%= if @is_full == true do %>
-    <.modal id="lobby_full_modal" show={true}>
-        <:title>
-            Sorry
-        </:title>
-
-        <p>The lobby is full.</p>
-        <p>Please try again later.</p>
-
-        <:confirm>
-            <.button>OK</.button>
-        </:confirm>
-    </.modal>
-    <% end %>
 
     <.footer />
 </div>

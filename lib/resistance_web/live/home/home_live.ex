@@ -7,8 +7,6 @@ defmodule ResistanceWeb.HomeLive do
     init_state =
       socket
       |> assign(:self, session["_csrf_token"])
-      |> assign(:form, to_form(%{"name" => ""}))
-      |> assign(:is_full, false)
       |> assign(:muted, false)
       |> assign(:music_file, "home-music.mp3")
 
@@ -16,32 +14,11 @@ defmodule ResistanceWeb.HomeLive do
   end
 
   @impl true
-  def handle_event("validate", %{"name" => name} = param, socket) do
-    case Pregame.Server.validate_name(name) do
-      {:error, msg} ->
-        {:noreply, assign(socket, :form, to_form(param, errors: [name: {msg, []}]))}
-
-      _ ->
-        {:noreply, assign(socket, :form, to_form(param))}
-    end
+  def handle_event("create_room", _value, socket) do
+    id = Ecto.UUID.generate |> String.slice(-6..-1)
+    {:ok, _} = Avalon.Supervisor.start_pregame(id)
+    Pregame.Server.add_player(id, socket.assigns.self, String.trim(NameGenerator.generate))
+    {:noreply, push_navigate(socket, to: "/lobby/#{id}")}
   end
 
-  @impl true
-  def handle_event("join", %{"name" => name} = param, socket) do
-    case Pregame.Server.add_player(socket.assigns.self, String.trim(name)) do
-      :lobby_full ->
-        # TODO: Show Lobby Full Modal
-        {:noreply, socket |> assign(:is_full, true)}
-
-      :game_in_progress ->
-        # TODO: Show Game in Progress Modal
-        {:noreply, socket}
-
-      {:error, msg} ->
-        {:noreply, assign(socket, :form, to_form(param, errors: [name: {msg, []}]))}
-
-      _ ->
-        {:noreply, push_navigate(socket, to: "/lobby")}
-    end
-  end
 end
