@@ -6,15 +6,15 @@ Our team of video game enthusiasts embarked on a journey to create an interactiv
 ## Setup/Installation
 
 ### Prerequisites
-- Elixir 1.14.4
-- Erlang 25
-- Postgres 15.2 (with username as `postgres` and password as `postgres`)
+- Elixir 1.18+
+- Erlang 25+
+- Postgres 15.2+ (with username as `postgres` and password as `postgres`)
 - Phoenix Framework 1.7.2
 
 ### Installation Steps
 1. Clone the repo. (Link in the bibliography below)
 2. Run `mix setup` to install dependencies.
-3. Launch the server with `mix phoenix.server` or `iex -S mix phoenix.server`.
+3. Launch the server with `mix phx.server` or `iex -S mix phx.server`.
 4. Access the app via `localhost:4000`.
 
 ## Tools Used
