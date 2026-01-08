@@ -32,7 +32,7 @@ defmodule ResistanceWeb.LobbyLive do
     case players[self] == nil do
       true -> {:noreply, push_navigate(socket, to: "/")}
       false ->
-        :timer.cancel(socket.assigns.timer_ref)
+        if socket.assigns.timer_ref, do: :timer.cancel(socket.assigns.timer_ref)
         {:noreply, socket
           |> assign(:players, players)
           |> assign(:time_to_start, nil)

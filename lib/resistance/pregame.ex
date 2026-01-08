@@ -64,80 +64,99 @@ defmodule Pregame.Server do
   end
 
   @impl true
-  def init(state) do
+  def init(_) do
     Process.flag(:trap_exit, true)
-    {:ok, state}
+    {:ok, %{players: %{}, timer_ref: nil}}
   end
 
   @impl true
   def handle_cast({:remove_player, id}, state) do
-    new_state = Map.delete(state, id)
-    broadcast(:update, new_state)
+    # Cancel timer if a player leaves
+    if state.timer_ref, do: :timer.cancel(state.timer_ref)
+
+    new_players = Map.delete(state.players, id)
+    new_state = %{state | players: new_players, timer_ref: nil}
+    broadcast(:update, new_players)
     {:noreply, new_state}
   end
 
   @impl true
   def handle_cast({:toggle_ready, id}, state) do
-    case Map.get(state, id) do
+    case Map.get(state.players, id) do
       nil -> {:noreply, state}
       {name, ready} ->
-        new_state = Map.put(state, id, {name, !ready})
-        case Enum.count(new_state) == max_players()
-          && Enum.all?(new_state, fn {_, {_, ready}} -> ready end) do
+        # Cancel existing timer when state changes
+        if state.timer_ref, do: :timer.cancel(state.timer_ref)
+
+        new_players = Map.put(state.players, id, {name, !ready})
+
+        # Check if all players are ready
+        all_ready = Enum.count(new_players) == max_players()
+          && Enum.all?(new_players, fn {_, {_, ready}} -> ready end)
+
+        case all_ready do
           true ->
-            broadcast(:start_timer, new_state)
-            :timer.send_after(5000, self(), :start_game)
-          _ -> broadcast(:update, new_state)
+            broadcast(:start_timer, new_players)
+            {:ok, timer_ref} = :timer.send_after(5000, self(), :start_game)
+            {:noreply, %{state | players: new_players, timer_ref: timer_ref}}
+          _ ->
+            broadcast(:update, new_players)
+            {:noreply, %{state | players: new_players, timer_ref: nil}}
         end
-        {:noreply, new_state}
     end
   end
 
   @impl true
   def handle_call({:add_player, id, name}, _from, state) do
     cond do
-      valid_name(name, state) != :ok ->
-        {:reply, valid_name(name, state), state}
-      Enum.count(state) == max_players() ->
+      valid_name(name, state.players) != :ok ->
+        {:reply, valid_name(name, state.players), state}
+      Enum.count(state.players) == max_players() ->
         {:reply, :lobby_full, state}
       GenServer.whereis(Game.Server) != nil ->
         {:reply, :game_in_progress, state}
       true ->
-        new_state = Map.put(state, id, {name, false})
-        broadcast(:update, new_state)
+        new_players = Map.put(state.players, id, {name, false})
+        new_state = %{state | players: new_players}
+        broadcast(:update, new_players)
         {:reply, :ok, new_state}
     end
   end
 
   @impl true
   def handle_call(:get_players, _from, state) do
-    {:reply, state, state}
+    {:reply, state.players, state}
   end
 
   @impl true
   def handle_call({:is_player, id}, _from, state) do
-    {:reply, Map.get(state, id) != nil, state}
+    {:reply, Map.get(state.players, id) != nil, state}
   end
 
   @impl true
   def handle_call({:validate_name, name}, _from, state) do
-    {:reply, valid_name(name, state), state}
+    {:reply, valid_name(name, state.players), state}
   end
 
   # start the Game.Server if all players are ready
   @impl true
   def handle_info(:start_game, state) do
-    if Enum.count(state) == max_players() do
-      Game.Server.start_link(state)
+    # Verify BOTH count AND ready status before starting
+    all_ready = Enum.count(state.players) == max_players() &&
+                Enum.all?(state.players, fn {_, {_, ready}} -> ready end)
+
+    if all_ready do
+      Game.Server.start_link(state.players)
     end
-    {:noreply, state}
+
+    {:noreply, %{state | timer_ref: nil}}
   end
 
   # reset the state when Game ends
   @impl true
   def handle_info({:EXIT, _from, _reason}, _) do
     Logger.log(:info, "Reseting Pregame.Server state")
-    {:noreply, %{}}
+    {:noreply, %{players: %{}, timer_ref: nil}}
   end
 
 
@@ -163,5 +182,5 @@ defmodule Pregame.Server do
     |> Enum.any?(fn {n, _} -> n == name end)
   end
 
-  def max_players(), do: 5
+  def max_players(), do: 2
 end

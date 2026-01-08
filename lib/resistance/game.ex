@@ -118,11 +118,13 @@ defmodule Game.Server do
       # initial stage is :approve for all players
       quest_votes: %{},
       team_rejection_count: 0,
-      winning_team: nil
+      winning_team: nil,
+      # timer reference for current stage
+      timer_ref: nil
     }
 
-    :timer.send_after(3000, self(), {:end_stage, :init})
-    {:ok, state}
+    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
+    {:ok, %{state | timer_ref: timer_ref}}
   end
 
   @impl true
@@ -167,6 +169,13 @@ defmodule Game.Server do
     updated_team_votes = Map.put(state.team_votes, player_id, vote)
     new_state = %{state | team_votes: updated_team_votes}
     broadcast(:update, new_state)
+
+    # Check if all players have voted - advance immediately
+    if map_size(updated_team_votes) == length(state.players) do
+      if new_state.timer_ref, do: Process.cancel_timer(new_state.timer_ref)
+      send(self(), {:end_stage, :voting})
+    end
+
     {:noreply, new_state}
   end
 
@@ -175,6 +184,14 @@ defmodule Game.Server do
     updated_quest_votes = Map.put(state.quest_votes, player_id, vote)
     new_state = %{state | quest_votes: updated_quest_votes}
     broadcast(:update, new_state)
+
+    # Check if all quest members have voted - advance immediately
+    quest_member_count = Enum.count(state.players, fn p -> p.on_quest end)
+    if map_size(updated_quest_votes) == quest_member_count do
+      if new_state.timer_ref, do: Process.cancel_timer(new_state.timer_ref)
+      send(self(), {:end_stage, :quest})
+    end
+
     {:noreply, new_state}
   end
 
@@ -198,7 +215,7 @@ defmodule Game.Server do
       cond do
         num_bad_guys > num_good_guys ->
           %{new_state | stage: :end_game, winning_team: :bad}
-          broadcast(:message, "Morded wins!")
+          broadcast(:message, "Mordred wins!")
           broadcast(:update, new_state)
           end_game()
 
@@ -280,8 +297,8 @@ defmodule Game.Server do
     new_king = find_king(new_state.players).name
     broadcast(:message, {:server, "#{new_king} is now king!"})
     broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :party_assembling})
-    new_state
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :party_assembling})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp voting_stage(state) do
@@ -292,30 +309,30 @@ defmodule Game.Server do
       |> Map.put(:stage, :voting)
 
     broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :voting})
-    new_state
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :voting})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp quest_stage(state) do
     Logger.log(:info, "quest_stage")
     new_state = Map.put(state, :stage, :quest)
     broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :quest})
-    new_state
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp quest_reveal_stage(state) do
     Logger.log(:info, "quest_reveal_stage")
     new_state = Map.put(state, :stage, :quest_reveal)
     broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :quest_reveal})
-    new_state
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest_reveal})
+    %{new_state | timer_ref: timer_ref}
   end
 
   # called after king selects team
   defp clean_up(%{stage: :party_assembling} = state) do
     Logger.log(:info, "clean_up")
-    :timer.send_after(3000, self(), {:end_stage, :init})
+    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
     %{
       players:
@@ -327,7 +344,8 @@ defmodule Game.Server do
       team_votes: %{},
       quest_votes: %{},
       team_rejection_count: state.team_rejection_count,
-      winning_team: nil
+      winning_team: nil,
+      timer_ref: timer_ref
     }
   end
 
@@ -340,7 +358,7 @@ defmodule Game.Server do
       broadcast(:update, %{state | stage: :end_game, winning_team: :bad})
       end_game()
     else
-      :timer.send_after(3000, self(), {:end_stage, :init})
+      {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
       %{
         players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
@@ -349,7 +367,8 @@ defmodule Game.Server do
         team_votes: %{},
         quest_votes: %{},
         team_rejection_count: state.team_rejection_count + 1,
-        winning_team: nil
+        winning_team: nil,
+        timer_ref: timer_ref
       }
     end
   end
@@ -372,7 +391,7 @@ defmodule Game.Server do
         end_game()
 
       {:continue, _} ->
-        :timer.send_after(3000, self(), {:end_stage, :init})
+        {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
         %{
           players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
@@ -381,7 +400,8 @@ defmodule Game.Server do
           team_votes: %{},
           quest_votes: %{},
           team_rejection_count: state.team_rejection_count,
-          winning_team: nil
+          winning_team: nil,
+          timer_ref: timer_ref
         }
     end
   end
