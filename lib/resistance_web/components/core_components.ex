@@ -79,7 +79,7 @@ defmodule ResistanceWeb.CoreComponents do
                 "avalon-modal hidden relative rounded-2xl bg-white p-14 shadow-lg shadow-zinc-700/10 ring-1 ring-zinc-700/10 transition #{@class}",
               ]}
             >
-              <div class="close-icon absolute top-6 right-5">
+              <div class="close-icon sticky top-3 right-2 ml-auto w-fit">
                 <button
                   phx-click={hide_modal(@on_cancel, @id)}
                   type="button"

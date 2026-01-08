@@ -21,23 +21,38 @@
         </div>
 
         <div class="btn-group">
-            <.button phx-click={show_modal("play_modal")}>Play</.button>
+            <.button phx-click={Phoenix.LiveView.JS.push("create_mode") |> show_modal("create_room_modal")}>Create a Game</.button>
+            <.button phx-click={Phoenix.LiveView.JS.push("join_mode") |> show_modal("join_room_modal")}>Join a Game</.button>
             <.button phx-click={show_modal("help_modal")}>Help</.button>
             <.button phx-click={show_modal("credits_modal")}>Credits</.button>
         </div>
     </div>
 
-    <.modal id="play_modal">
-        <:title>
-            Who goes there?
-        </:title>
+    <.modal id="create_room_modal">
+        <:title>Create a Room</:title>
         <.simple_form for={@form} phx-change="validate" phx-submit="join">
             <.input
                 field={@form[:name]}
                 label="Enter your name"
                 placeholder="Ser Ulrich von Liechtenstein"/>
             <:actions>
-                <.button>Join Lobby</.button>
+                <.button>Create Room</.button>
+            </:actions>
+        </.simple_form>
+    </.modal>
+
+    <.modal id="join_room_modal">
+        <:title>Join a Room</:title>
+        <.simple_form for={@form} phx-change="validate" phx-submit="join">
+            <.input
+                field={@form[:name]}
+                label="Enter your name"
+                placeholder="Ser Ulrich von Liechtenstein"/>
+            <.input
+                field={@form[:room_code]}
+                label="Enter the room code" />
+            <:actions>
+                <.button>Join Room</.button>
             </:actions>
         </.simple_form>
     </.modal>

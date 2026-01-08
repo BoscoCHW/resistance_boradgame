@@ -1,14 +1,43 @@
 .avalon-top-bar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     width: 100%;
 }
 
-.avalon-top-bar > * {
+.avalon-top-bar .actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.avalon-top-bar .actions > * {
     margin: 0 0.5rem;
 }
 
 .avalon-sound-toggle {
     cursor: pointer;
+}
+
+.avalon-top-bar .room-code-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    margin-left: 0.5rem;
+}
+
+.avalon-top-bar .room-code-display span:first-child {
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.avalon-top-bar .room-code-display .code {
+    font-size: 1.2rem;
+    font-weight: bold;
+    letter-spacing: 0.15em;
+    font-family: monospace;
+    color: #fff;
 }

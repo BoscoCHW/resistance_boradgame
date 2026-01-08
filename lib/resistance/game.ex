@@ -15,79 +15,142 @@ defmodule Player do
   def new(id, name, role, is_king \\ false, on_quest \\ false) do
     %Player{id: id, name: name, role: role, is_king: is_king, on_quest: on_quest}
   end
+
+  def become_king(player) do
+    %{player | is_king: true}
+  end
 end
 
 defmodule Game.Server do
   use GenServer
   require Logger
 
+  alias Resistance.RoomCode
+
   @quest_config %{1 => 2, 2 => 3, 3 => 2, 4 => 3, 5 => 3}
 
-  @doc """
-  Store game state. The state is a map with the following keys:
-      players: [Player], # a list of Player, order never change during the game
-      quest_outcomes: [:success | :fail],     # a list of quest outcomes
-      stage: :init | :party_assembling | :voting | :quest | :quest_reveal | :end_game # current stage of the game
-      team_votes: %{player_id => :approve | :reject},      # a map of player's vote for the current team
-      quest_votes: %{player_id => :assist | :sabotage}      # a map of team members vote for the current quest
-      team_rejection_count: int
-  """
+  # Store game state. The state is a map with the following keys:
+  #     room_code: string, # the room code for this game
+  #     players: [Player], # a list of Player, order never change during the game
+  #     quest_outcomes: [:success | :fail],     # a list of quest outcomes
+  #     stage: :init | :party_assembling | :voting | :quest | :quest_reveal | :end_game # current stage of the game
+  #     team_votes: %{player_id => :approve | :reject},      # a map of player's vote for the current team
+  #     quest_votes: %{player_id => :assist | :sabotage}      # a map of team members vote for the current quest
+  #     team_rejection_count: int
 
-  def start_link(pregame_state) do
-    GenServer.start_link(__MODULE__, pregame_state, name: __MODULE__)
+  # Client API - Room Management
+
+  @doc """
+  Child spec for DynamicSupervisor.
+  Uses :transient restart - only restart on abnormal exits, not normal shutdowns.
+  """
+  def child_spec({room_code, pregame_state}) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [room_code, pregame_state]},
+      restart: :transient,
+      type: :worker
+    }
   end
+
+  def start_link(room_code, pregame_state) do
+    Logger.info("Starting Game.Server for room #{room_code}...")
+    GenServer.start_link(__MODULE__, {room_code, pregame_state}, name: via_tuple(room_code))
+  end
+
+  @doc """
+  Finds an existing game server for the given room code.
+  Returns {:ok, pid} or :error.
+  """
+  def find(room_code) do
+    case Registry.lookup(Resistance.RoomRegistry, RoomCode.game_key(room_code)) do
+      [{pid, _}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
+
+  @doc """
+  Checks if a game exists for the given room.
+  """
+  def room_exists?(room_code) do
+    case find(room_code) do
+      {:ok, _} -> true
+      :error -> false
+    end
+  end
+
+  # Client API - Game Actions
 
   @doc """
     get players in the game
   """
-
-  def get_state() do
-    GenServer.call(__MODULE__, :get_state)
+  def get_state(room_code) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.call(via_tuple(room_code), :get_state)
+      :error -> nil
+    end
   end
 
   @doc """
     check if player is in the game
   """
-
-  def is_player(id) do
-    GenServer.call(__MODULE__, {:is_player, id})
+  def is_player(room_code, id) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.call(via_tuple(room_code), {:is_player, id})
+      :error -> false
+    end
   end
 
   @doc """
     toggle selected player's on_quest status
   """
-  def toggle_quest_member(king_id, player_id) do
-    GenServer.call(__MODULE__, {:toggle_quest_member, king_id, player_id})
+  def toggle_quest_member(room_code, king_id, player_id) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.call(via_tuple(room_code), {:toggle_quest_member, king_id, player_id})
+      :error -> {:error, "Game not found"}
+    end
   end
 
   @doc """
     add a player's vote to the current vote list. If everyone has voted, broadcast if the team is approved or not
   """
-  def vote_for_team(player_id, vote) do
-    GenServer.cast(__MODULE__, {:vote_for_team, player_id, vote})
+  def vote_for_team(room_code, player_id, vote) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.cast(via_tuple(room_code), {:vote_for_team, player_id, vote})
+      :error -> :ok
+    end
   end
 
   @doc """
     menbers of the current team vote for the mission. If everyone has voted, broadcast if the mission is successful or not
   """
-  def vote_for_mission(player_id, vote) do
-    GenServer.cast(__MODULE__, {:vote_for_mission, player_id, vote})
+  def vote_for_mission(room_code, player_id, vote) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.cast(via_tuple(room_code), {:vote_for_mission, player_id, vote})
+      :error -> :ok
+    end
   end
 
   @doc """
     player broadcasts a message to all players
   """
-  def message(player_id, msg) do
-    GenServer.cast(__MODULE__, {:message, player_id, msg})
+  def message(room_code, player_id, msg) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.cast(via_tuple(room_code), {:message, player_id, msg})
+      :error -> :ok
+    end
   end
 
-  def remove_player(player_id) do
-    GenServer.cast(__MODULE__, {:remove_player, player_id})
+  def remove_player(room_code, player_id) do
+    case find(room_code) do
+      {:ok, _} -> GenServer.cast(via_tuple(room_code), {:remove_player, player_id})
+      :error -> :ok
+    end
   end
 
   ### subscribe and broadcast functions
-  def subscribe() do
-    Phoenix.PubSub.subscribe(Resistance.PubSub, "game")
+  def subscribe(room_code) do
+    Phoenix.PubSub.subscribe(Resistance.PubSub, RoomCode.pubsub_topic(room_code))
   end
 
   # get max number of players for a quest
@@ -96,8 +159,7 @@ defmodule Game.Server do
   end
 
   @impl true
-
-  def init(pregame_state) do
+  def init({room_code, pregame_state}) do
     id_n_names =
       Enum.reduce(pregame_state, [], fn {player_id, {name, _}}, acc ->
         [{player_id, name} | acc]
@@ -106,6 +168,8 @@ defmodule Game.Server do
     players = make_players(id_n_names)
 
     state = %{
+      # room code for this game
+      room_code: room_code,
       # a list of Player, order never change during the game
       players: players,
       # [:success | :fail]   #current_mission = length(mission_results) + 1
@@ -118,11 +182,13 @@ defmodule Game.Server do
       # initial stage is :approve for all players
       quest_votes: %{},
       team_rejection_count: 0,
-      winning_team: nil
+      winning_team: nil,
+      # timer reference for current stage
+      timer_ref: nil
     }
 
-    :timer.send_after(3000, self(), {:end_stage, :init})
-    {:ok, state}
+    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
+    {:ok, %{state | timer_ref: timer_ref}}
   end
 
   @impl true
@@ -157,7 +223,7 @@ defmodule Game.Server do
           end)
 
         new_state = %{state | players: updated_players}
-        broadcast(:update, new_state)
+        broadcast(state.room_code, :update, new_state)
         {:reply, :ok, new_state}
     end
   end
@@ -166,7 +232,14 @@ defmodule Game.Server do
   def handle_cast({:vote_for_team, player_id, vote}, state) do
     updated_team_votes = Map.put(state.team_votes, player_id, vote)
     new_state = %{state | team_votes: updated_team_votes}
-    broadcast(:update, new_state)
+    broadcast(state.room_code, :update, new_state)
+
+    # Check if all players have voted - advance immediately
+    if map_size(updated_team_votes) == length(state.players) do
+      if new_state.timer_ref, do: Process.cancel_timer(new_state.timer_ref)
+      send(self(), {:end_stage, :voting})
+    end
+
     {:noreply, new_state}
   end
 
@@ -174,7 +247,15 @@ defmodule Game.Server do
   def handle_cast({:vote_for_mission, player_id, vote}, state) do
     updated_quest_votes = Map.put(state.quest_votes, player_id, vote)
     new_state = %{state | quest_votes: updated_quest_votes}
-    broadcast(:update, new_state)
+    broadcast(state.room_code, :update, new_state)
+
+    # Check if all quest members have voted - advance immediately
+    quest_member_count = Enum.count(state.players, fn p -> p.on_quest end)
+    if map_size(updated_quest_votes) == quest_member_count do
+      if new_state.timer_ref, do: Process.cancel_timer(new_state.timer_ref)
+      send(self(), {:end_stage, :quest})
+    end
+
     {:noreply, new_state}
   end
 
@@ -198,15 +279,15 @@ defmodule Game.Server do
       cond do
         num_bad_guys > num_good_guys ->
           %{new_state | stage: :end_game, winning_team: :bad}
-          broadcast(:message, "Morded wins!")
-          broadcast(:update, new_state)
-          end_game()
+          broadcast(state.room_code, :message, "Mordred wins!")
+          broadcast(state.room_code, :update, new_state)
+          end_game(state.room_code)
 
         num_bad_guys == 0 ->
           %{new_state | stage: :end_game, winning_team: :good}
-          broadcast(:message, "Arthur wins!")
-          broadcast(:update, new_state)
-          end_game()
+          broadcast(state.room_code, :message, "Arthur wins!")
+          broadcast(state.room_code, :update, new_state)
+          end_game(state.room_code)
 
         true ->
           new_state
@@ -218,7 +299,7 @@ defmodule Game.Server do
   @impl true
   def handle_cast({:message, player_id, msg}, state) do
     sender = Enum.find(state.players, fn player -> player.id == player_id end)
-    broadcast(:message, {:user, "#{sender.name}: #{msg}"})
+    broadcast(state.room_code, :message, {:user, "#{sender.name}: #{msg}"})
     {:noreply, state}
   end
 
@@ -226,7 +307,7 @@ defmodule Game.Server do
   def handle_info({:end_stage, stage}, state) do
     case stage do
       :init ->
-        broadcast(:update, state)
+        broadcast(state.room_code, :update, state)
         {:noreply, party_assembling_stage(state)}
 
       :party_assembling ->
@@ -278,10 +359,10 @@ defmodule Game.Server do
     players = assign_next_king(state.players)
     new_state = %{state | stage: :party_assembling, players: players}
     new_king = find_king(new_state.players).name
-    broadcast(:message, {:server, "#{new_king} is now king!"})
-    broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :party_assembling})
-    new_state
+    broadcast(state.room_code, :message, {:server, "#{new_king} is now king!"})
+    broadcast(state.room_code, :update, new_state)
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :party_assembling})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp voting_stage(state) do
@@ -291,33 +372,34 @@ defmodule Game.Server do
       state
       |> Map.put(:stage, :voting)
 
-    broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :voting})
-    new_state
+    broadcast(state.room_code, :update, new_state)
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :voting})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp quest_stage(state) do
     Logger.log(:info, "quest_stage")
     new_state = Map.put(state, :stage, :quest)
-    broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :quest})
-    new_state
+    broadcast(state.room_code, :update, new_state)
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest})
+    %{new_state | timer_ref: timer_ref}
   end
 
   defp quest_reveal_stage(state) do
     Logger.log(:info, "quest_reveal_stage")
     new_state = Map.put(state, :stage, :quest_reveal)
-    broadcast(:update, new_state)
-    :timer.send_after(15000, self(), {:end_stage, :quest_reveal})
-    new_state
+    broadcast(state.room_code, :update, new_state)
+    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest_reveal})
+    %{new_state | timer_ref: timer_ref}
   end
 
   # called after king selects team
   defp clean_up(%{stage: :party_assembling} = state) do
     Logger.log(:info, "clean_up")
-    :timer.send_after(3000, self(), {:end_stage, :init})
+    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
     %{
+      room_code: state.room_code,
       players:
         Enum.map(state.players, fn player ->
           %Player{player | on_quest: false}
@@ -327,7 +409,8 @@ defmodule Game.Server do
       team_votes: %{},
       quest_votes: %{},
       team_rejection_count: state.team_rejection_count,
-      winning_team: nil
+      winning_team: nil,
+      timer_ref: timer_ref
     }
   end
 
@@ -336,20 +419,22 @@ defmodule Game.Server do
     Logger.log(:info, "clean_up")
 
     if state.team_rejection_count >= 4 do
-      broadcast(:message, {:server, "Bad guys win!"})
-      broadcast(:update, %{state | stage: :end_game, winning_team: :bad})
-      end_game()
+      broadcast(state.room_code, :message, {:server, "Bad guys win!"})
+      broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :bad})
+      end_game(state.room_code)
     else
-      :timer.send_after(3000, self(), {:end_stage, :init})
+      {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
       %{
+        room_code: state.room_code,
         players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
         quest_outcomes: state.quest_outcomes,
         stage: :init,
         team_votes: %{},
         quest_votes: %{},
         team_rejection_count: state.team_rejection_count + 1,
-        winning_team: nil
+        winning_team: nil,
+        timer_ref: timer_ref
       }
     end
   end
@@ -362,26 +447,28 @@ defmodule Game.Server do
 
     case check_win_condition(new_quest_outcomes) do
       {:end_game, :bad} ->
-        broadcast(:message, {:server, "Mordred wins!"})
-        broadcast(:update, %{state | stage: :end_game, winning_team: :bad})
-        end_game()
+        broadcast(state.room_code, :message, {:server, "Mordred wins!"})
+        broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :bad})
+        end_game(state.room_code)
 
       {:end_game, :good} ->
-        broadcast(:message, {:server, "Arthur wins!"})
-        broadcast(:update, %{state | stage: :end_game, winning_team: :good})
-        end_game()
+        broadcast(state.room_code, :message, {:server, "Arthur wins!"})
+        broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :good})
+        end_game(state.room_code)
 
       {:continue, _} ->
-        :timer.send_after(3000, self(), {:end_stage, :init})
+        {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
         %{
+          room_code: state.room_code,
           players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
           quest_outcomes: new_quest_outcomes,
           stage: :init,
           team_votes: %{},
           quest_votes: %{},
           team_rejection_count: state.team_rejection_count,
-          winning_team: nil
+          winning_team: nil,
+          timer_ref: timer_ref
         }
     end
   end
@@ -434,8 +521,18 @@ defmodule Game.Server do
       end)
   end
 
-  defp broadcast(event, payload) do
-    Phoenix.PubSub.broadcast(Resistance.PubSub, "game", {event, payload})
+  # Helper Functions
+
+  defp via_tuple(room_code) do
+    {:via, Registry, {Resistance.RoomRegistry, RoomCode.game_key(room_code)}}
+  end
+
+  defp broadcast(room_code, event, payload) do
+    Phoenix.PubSub.broadcast(
+      Resistance.PubSub,
+      RoomCode.pubsub_topic(room_code),
+      {event, payload}
+    )
   end
 
   # determines if the quest succeeded or failed
@@ -455,8 +552,8 @@ defmodule Game.Server do
   end
 
   # Terminate server when game ends
-  defp end_game() do
-    GenServer.stop(__MODULE__)
+  defp end_game(room_code) do
+    GenServer.stop(via_tuple(room_code))
   end
 
   # get current round
