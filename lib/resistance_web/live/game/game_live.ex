@@ -7,6 +7,7 @@ defmodule ResistanceWeb.GameLive do
     {:ok, socket
       |> assign(:token, session["_csrf_token"])
       |> assign(:room_code, nil)
+      |> assign(:state, nil)
       |> assign(:form, to_form(%{"message" => ""}))
       |> assign(:form_key, 0)
       |> assign(:messages, [])

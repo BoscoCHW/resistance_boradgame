@@ -10,59 +10,58 @@
         room_code={@room_code}
     />
 
-    <%= if @state != nil do %>
-        <div class="content">
+    <div :if={@state} class="content">
 
-            <%= if @time_left == 0 || @time_left == nil do %>
-                <.main_card_wait />
-            <% else %>
-                <%= case @state.stage do %>
-                    <% :party_assembling -> %>
-                        <.main_card_party
-                            self={@self}
-                            time_left={@time_left}
-                        />
-                    <% :voting -> %>
-                        <.main_card_vote
-                            self={@self}
-                            time_left={@time_left}
-                            team_votes={@state.team_votes}
-                            on_vote="vote_for_team"
-                        />
-                    <% :quest -> %>
-                        <.main_card_quest
-                            self={@self}
-                            time_left={@time_left}
-                            quest_votes={@state.quest_votes}
-                            on_vote="vote_for_quest"
-                        />
-                    <% :quest_reveal -> %>
-                        <.main_card_quest_reveal
-                            success={Enum.count(@state.quest_votes, fn {_, v} -> v == :sabotage end) == 0}
-                            result={Enum.map(@state.quest_votes, fn {_, v} -> if v == :assist, do: "✅", else: "❌" end)}
-                            time_left={@time_left}
-                        />
-                    <% _ ->  %>
-                        <.main_card_wait />
-                <% end %>
+        <%= if @time_left == 0 || @time_left == nil do %>
+            <.main_card_wait />
+        <% else %>
+            <%= case @state.stage do %>
+                <% :party_assembling -> %>
+                    <.main_card_party
+                        self={@self}
+                        time_left={@time_left}
+                    />
+                <% :voting -> %>
+                    <.main_card_vote
+                        self={@self}
+                        time_left={@time_left}
+                        team_votes={@state.team_votes}
+                        on_vote="vote_for_team"
+                    />
+                <% :quest -> %>
+                    <.main_card_quest
+                        self={@self}
+                        time_left={@time_left}
+                        quest_votes={@state.quest_votes}
+                        on_vote="vote_for_quest"
+                    />
+                <% :quest_reveal -> %>
+                    <.main_card_quest_reveal
+                        success={Enum.count(@state.quest_votes, fn {_, v} -> v == :sabotage end) == 0}
+                        result={Enum.map(@state.quest_votes, fn {_, v} -> if v == :assist, do: "✅", else: "❌" end)}
+                        time_left={@time_left}
+                    />
+                <% _ ->  %>
+                    <.main_card_wait />
             <% end %>
+        <% end %>
 
-            <.chat_box
-                form={@form}
-                form_key={@form_key}
-                messages={@messages}
-            />
+        <.chat_box
+            form={@form}
+            form_key={@form_key}
+            messages={@messages}
+        />
 
-            <.side_bar
-                quest_outcomes={@state.quest_outcomes}
-                self={@self}
-                players={@state.players}
-                stage={@state.stage}
-                team_votes={@state.team_votes}
-                on_select_player="toggle_quest_member"
-            />
-        </div>
-    <% end %>
+        <.side_bar
+            quest_outcomes={@state.quest_outcomes}
+            self={@self}
+            players={@state.players}
+            stage={@state.stage}
+            team_votes={@state.team_votes}
+            on_select_player="toggle_quest_member"
+        />
+    </div>
+
     <.footer />
 </div>
 
