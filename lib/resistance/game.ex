@@ -395,6 +395,7 @@ defmodule Game.Server do
     {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
     %{
+      room_code: state.room_code,
       players:
         Enum.map(state.players, fn player ->
           %Player{player | on_quest: false}
@@ -421,6 +422,7 @@ defmodule Game.Server do
       {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
       %{
+        room_code: state.room_code,
         players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
         quest_outcomes: state.quest_outcomes,
         stage: :init,
@@ -454,6 +456,7 @@ defmodule Game.Server do
         {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
         %{
+          room_code: state.room_code,
           players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
           quest_outcomes: new_quest_outcomes,
           stage: :init,
