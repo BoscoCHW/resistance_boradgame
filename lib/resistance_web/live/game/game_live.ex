@@ -6,6 +6,7 @@ defmodule ResistanceWeb.GameLive do
   def mount(_params, session, socket) do
     {:ok, socket
       |> assign(:token, session["_csrf_token"])
+      |> assign(:room_code, nil)
       |> assign(:form, to_form(%{"message" => ""}))
       |> assign(:messages, [])
       |> assign(:time_left, nil)
@@ -15,17 +16,24 @@ defmodule ResistanceWeb.GameLive do
   end
 
   @impl true
-  def handle_params(_params, _url, %{assigns: %{token: token} } = socket) do
-    cond do
-      GenServer.whereis(Game.Server) == nil || !Game.Server.is_player(token) ->
+  def handle_params(%{"room_code" => room_code}, _url, %{assigns: %{token: token} } = socket) do
+    case Resistance.RoomCode.validate(room_code) do
+      {:ok, normalized_code} ->
+        cond do
+          !Game.Server.room_exists?(normalized_code) || !Game.Server.is_player(normalized_code, token) ->
+            {:noreply, push_navigate(socket, to: "/")}
+          true ->
+            Game.Server.subscribe(normalized_code)
+            state = Game.Server.get_state(normalized_code)
+            {:noreply, socket
+              |> assign(:room_code, normalized_code)
+              |> assign(:state, state)
+              |> assign(:self, get_self(token, state.players))
+              |> start_timer_for_stage(state.stage)}
+        end
+
+      {:error, _} ->
         {:noreply, push_navigate(socket, to: "/")}
-      true ->
-        Game.Server.subscribe()
-        state = Game.Server.get_state
-        {:noreply, socket
-          |> assign(:state, state)
-          |> assign(:self, get_self(token, state.players))
-          |> start_timer_for_stage(state.stage)}
     end
   end
 
@@ -59,34 +67,35 @@ defmodule ResistanceWeb.GameLive do
   def handle_info(:tick, %{assigns: %{time_left: s}} = socket) do
     case s do
       s when s == nil or s == 0 ->
-      if socket.assigns.timer_ref, do: :timer.cancel(socket.assigns.timer_ref)
-      {:noreply, socket |> assign(:time_left, nil) |> assign(:timer_ref, nil)}
-      _ -> {:noreply, socket |> assign(:time_left, s - 1)}
+        if socket.assigns.timer_ref, do: :timer.cancel(socket.assigns.timer_ref)
+        {:noreply, socket |> assign(:time_left, nil) |> assign(:timer_ref, nil)}
+      _ ->
+        {:noreply, socket |> assign(:time_left, s - 1)}
     end
   end
 
   @impl true
   def handle_event("toggle_quest_member", %{"player" => player_id}, socket) do
-    Game.Server.toggle_quest_member(socket.assigns.self.id, player_id)
+    Game.Server.toggle_quest_member(socket.assigns.room_code, socket.assigns.self.id, player_id)
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("vote_for_team", %{"vote" => vote}, socket) do
-    Game.Server.vote_for_team(socket.assigns.self.id, String.to_atom(vote))
+    Game.Server.vote_for_team(socket.assigns.room_code, socket.assigns.self.id, String.to_atom(vote))
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("vote_for_quest", %{"vote" => vote}, socket) do
-    Game.Server.vote_for_mission(socket.assigns.self.id, String.to_atom(vote))
+    Game.Server.vote_for_mission(socket.assigns.room_code, socket.assigns.self.id, String.to_atom(vote))
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("message", %{"message" => msg}, socket) do
     if (String.trim(msg) != "") do
-      Game.Server.message(socket.assigns.self.id, msg)
+      Game.Server.message(socket.assigns.room_code, socket.assigns.self.id, msg)
     end
     {:noreply, socket |> assign(:form, to_form(%{"message" => ""}))}
   end

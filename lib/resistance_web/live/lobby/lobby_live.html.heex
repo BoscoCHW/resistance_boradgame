@@ -8,9 +8,16 @@
         music_file={@music_file}
         show_quit={true}
         id={@self}
+        room_code={@room_code}
     />
 
     <div class="text">
+        <div style="background: rgba(0, 0, 0, 0.6); padding: 0.5rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: inline-block;">
+            <span style="font-size: 0.9rem; color: #ccc;">Room Code: </span>
+            <span style="font-size: 1.2rem; font-weight: bold; letter-spacing: 0.15em; font-family: monospace; color: #fff;">
+                <%= @room_code %>
+            </span>
+        </div>
         <h1 class="title">Lobby (<%= Enum.count(@players) %> / 5 players)</h1>
         <h2 class="subtitle">
             <%= cond do

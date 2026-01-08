@@ -16,11 +16,13 @@ defmodule Resistance.Application do
       {Phoenix.PubSub, name: Resistance.PubSub},
       # Start Finch
       {Finch, name: Resistance.Finch},
+      # Registry for room-based process naming
+      {Registry, keys: :unique, name: Resistance.RoomRegistry},
+      # DynamicSupervisor for spawning pregame/game processes
+      {DynamicSupervisor, name: Resistance.RoomSupervisor, strategy: :one_for_one},
       # Start the Endpoint (http/https)
-      ResistanceWeb.Endpoint,
-      Pregame.Server
-      # Start a worker by calling: Resistance.Worker.start_link(arg)
-      # {Resistance.Worker, arg}
+      ResistanceWeb.Endpoint
+      # Pregame.Server and Game.Server now spawned dynamically per room
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

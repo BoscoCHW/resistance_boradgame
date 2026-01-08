@@ -17,8 +17,8 @@ defmodule ResistanceWeb.Router do
   scope "/", ResistanceWeb do
     pipe_through :browser
 
-    live "/lobby", LobbyLive, :lobby
-    live "/game", GameLive, :game
+    live "/lobby/:room_code", LobbyLive, :lobby
+    live "/game/:room_code", GameLive, :game
 
     # catch-all route
     live "/*path", HomeLive, :home

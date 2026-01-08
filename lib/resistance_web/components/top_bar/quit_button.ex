@@ -28,10 +28,15 @@ defmodule ResistanceWeb.TopBar.QuitButton do
   end
 
   def handle_event("quit", %{"id" => id}, socket) do
-    Pregame.Server.remove_player(id)
-    if GenServer.whereis(Game.Server) do
-      Game.Server.remove_player(id)
+    room_code = socket.assigns.room_code
+
+    if room_code do
+      Pregame.Server.remove_player(room_code, id)
+      if Game.Server.room_exists?(room_code) do
+        Game.Server.remove_player(room_code, id)
+      end
     end
+
     {:noreply, push_navigate(socket, to: "/")}
   end
 end
