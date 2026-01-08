@@ -1,8 +1,12 @@
 defmodule ResistanceWeb.TopBar.QuitButton do
-  use Phoenix.LiveComponent
+  use Phoenix.Component
   import ResistanceWeb.CoreComponents
 
-  def render(assigns) do
+  @doc """
+  Renders a quit button with confirmation modal.
+  The parent LiveView must implement a "quit" event handler.
+  """
+  def quit_button(assigns) do
     ~H"""
       <div>
         <.modal id="quit-button" class="quit-modal">
@@ -13,7 +17,7 @@ defmodule ResistanceWeb.TopBar.QuitButton do
           <p>Are you sure you want to leave?</p>
 
           <:confirm>
-            <span phx-click="quit" phx-value-id={@id} phx-target={@myself}>
+            <span phx-click="quit">
             Confirm
             </span>
           </:confirm>
@@ -25,18 +29,5 @@ defmodule ResistanceWeb.TopBar.QuitButton do
         />
       </div>
     """
-  end
-
-  def handle_event("quit", %{"id" => id}, socket) do
-    room_code = socket.assigns.room_code
-
-    if room_code do
-      Pregame.Server.remove_player(room_code, id)
-      if Game.Server.room_exists?(room_code) do
-        Game.Server.remove_player(room_code, id)
-      end
-    end
-
-    {:noreply, push_navigate(socket, to: "/")}
   end
 end

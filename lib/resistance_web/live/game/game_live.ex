@@ -100,6 +100,20 @@ defmodule ResistanceWeb.GameLive do
     {:noreply, socket |> assign(:form, to_form(%{"message" => ""}))}
   end
 
+  @impl true
+  def handle_event("quit", _params, socket) do
+    room_code = socket.assigns.room_code
+    player_id = socket.assigns.self.id
+
+    # Player is in game, so remove from game server only
+    # Pregame server is waiting for game to end, no need to remove
+    if room_code do
+      Game.Server.remove_player(room_code, player_id)
+    end
+
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
   defp get_self(id, players) do
     Enum.find(players, fn p -> p.id == id end)
   end

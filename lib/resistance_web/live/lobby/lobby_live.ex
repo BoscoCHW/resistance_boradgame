@@ -90,6 +90,15 @@ defmodule ResistanceWeb.LobbyLive do
   end
 
   @impl true
+  def handle_event("quit", _params, %{assigns: %{self: self, room_code: room_code} } = socket) do
+    # Player is in lobby, so remove from pregame server only
+    if room_code do
+      Pregame.Server.remove_player(room_code, self)
+    end
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
   def terminate(_reason, %{assigns: %{self: self, room_code: room_code} }) do
     if room_code do
       Pregame.Server.remove_player(room_code, self)
