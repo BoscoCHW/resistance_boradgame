@@ -8,6 +8,7 @@ defmodule ResistanceWeb.Game.ChatBox do
   """
 
   attr :form, :any, required: true, doc: "Form containing messages input"
+  attr :form_key, :integer, required: true, doc: "Unique key to force form reset"
   attr :messages, :any, required: true, doc: "Message list"
 
   def chat_box(assigns) do
@@ -20,14 +21,12 @@ defmodule ResistanceWeb.Game.ChatBox do
         </div>
 
         <.simple_form
-          id="message-form"
+          id={"message-form-#{@form_key}"}
           for={@form}
           phx-submit="message"
-          phx-hook="FormReset"
         >
             <.input
                 field={@form[:message]}
-                phx-reset=""
                 placeholder="Send a missive..."/>
             <input id="message-submit" type="submit" hidden />
         </.simple_form>

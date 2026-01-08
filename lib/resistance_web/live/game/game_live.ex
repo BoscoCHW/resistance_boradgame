@@ -8,6 +8,7 @@ defmodule ResistanceWeb.GameLive do
       |> assign(:token, session["_csrf_token"])
       |> assign(:room_code, nil)
       |> assign(:form, to_form(%{"message" => ""}))
+      |> assign(:form_key, 0)
       |> assign(:messages, [])
       |> assign(:time_left, nil)
       |> assign(:timer_ref, nil)
@@ -97,7 +98,10 @@ defmodule ResistanceWeb.GameLive do
     if (String.trim(msg) != "") do
       Game.Server.message(socket.assigns.room_code, socket.assigns.self.id, msg)
     end
-    {:noreply, socket |> assign(:form, to_form(%{"message" => ""}))}
+    # Increment form_key to force form reset
+    {:noreply, socket
+      |> assign(:form, to_form(%{"message" => ""}))
+      |> assign(:form_key, socket.assigns.form_key + 1)}
   end
 
   @impl true

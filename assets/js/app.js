@@ -22,15 +22,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 
-let Hooks = {
-    FormReset : {
-        updated() {
-            let input = this.el.querySelector('[phx-reset]')
-            let value = input.getAttribute('phx-reset')
-            input.value = value
-        },
-    },
-}
+let Hooks = {}
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToken}, hooks: Hooks})
