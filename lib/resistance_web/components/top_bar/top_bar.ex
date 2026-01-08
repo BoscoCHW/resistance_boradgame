@@ -18,11 +18,17 @@ defmodule ResistanceWeb.TopBar do
   def top_bar(assigns) do
     ~H"""
     <div class="avalon-top-bar">
-      <.how_to_play_shortcut />
-      <.live_component module={SoundToggle} muted={@muted} music_file={@music_file} id="sound-toggle" />
-      <%= if @show_quit do %>
-        <QuitButton.quit_button />
-      <% end %>
+      <div :if={@room_code} class="room-code-display">
+        <span>Room: </span>
+        <span class="code"><%= @room_code %></span>
+      </div>
+      <div class="actions">
+        <.how_to_play_shortcut />
+        <.live_component module={SoundToggle} muted={@muted} music_file={@music_file} id="sound-toggle" />
+        <%= if @show_quit do %>
+          <QuitButton.quit_button />
+        <% end %>
+      </div>
     </div>
     """
   end

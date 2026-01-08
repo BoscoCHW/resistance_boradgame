@@ -7,14 +7,8 @@
         muted={@muted}
         music_file={@music_file}
         show_quit={true}
+        room_code={@room_code}
     />
-
-    <div style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); padding: 0.4rem 1rem; border-radius: 8px; z-index: 100;">
-        <span style="font-size: 0.85rem; color: #ccc;">Room: </span>
-        <span style="font-size: 1rem; font-weight: bold; letter-spacing: 0.15em; font-family: monospace; color: #fff;">
-            <%= @room_code %>
-        </span>
-    </div>
 
     <%= if @state != nil do %>
         <div class="content">
