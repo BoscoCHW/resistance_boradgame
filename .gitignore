@@ -36,3 +36,8 @@ npm-debug.log
 /assets/node_modules/
 
 .DS_Store
+
+
+# Davia
+.davia/
+.claude/skills/davia-documentation/SKILL.md
