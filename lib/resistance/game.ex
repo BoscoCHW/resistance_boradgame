@@ -15,6 +15,10 @@ defmodule Player do
   def new(id, name, role, is_king \\ false, on_quest \\ false) do
     %Player{id: id, name: name, role: role, is_king: is_king, on_quest: on_quest}
   end
+
+  def become_king(player) do
+    %{player | is_king: true}
+  end
 end
 
 defmodule Game.Server do
