@@ -25,16 +25,14 @@ defmodule Game.Server do
 
   @quest_config %{1 => 2, 2 => 3, 3 => 2, 4 => 3, 5 => 3}
 
-  @doc """
-  Store game state. The state is a map with the following keys:
-      room_code: string, # the room code for this game
-      players: [Player], # a list of Player, order never change during the game
-      quest_outcomes: [:success | :fail],     # a list of quest outcomes
-      stage: :init | :party_assembling | :voting | :quest | :quest_reveal | :end_game # current stage of the game
-      team_votes: %{player_id => :approve | :reject},      # a map of player's vote for the current team
-      quest_votes: %{player_id => :assist | :sabotage}      # a map of team members vote for the current quest
-      team_rejection_count: int
-  """
+  # Store game state. The state is a map with the following keys:
+  #     room_code: string, # the room code for this game
+  #     players: [Player], # a list of Player, order never change during the game
+  #     quest_outcomes: [:success | :fail],     # a list of quest outcomes
+  #     stage: :init | :party_assembling | :voting | :quest | :quest_reveal | :end_game # current stage of the game
+  #     team_votes: %{player_id => :approve | :reject},      # a map of player's vote for the current team
+  #     quest_votes: %{player_id => :assist | :sabotage}      # a map of team members vote for the current quest
+  #     team_rejection_count: int
 
   # Client API - Room Management
 
