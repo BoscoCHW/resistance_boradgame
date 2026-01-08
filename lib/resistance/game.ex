@@ -38,6 +38,19 @@ defmodule Game.Server do
 
   # Client API - Room Management
 
+  @doc """
+  Child spec for DynamicSupervisor.
+  Uses :transient restart - only restart on abnormal exits, not normal shutdowns.
+  """
+  def child_spec({room_code, pregame_state}) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [room_code, pregame_state]},
+      restart: :transient,
+      type: :worker
+    }
+  end
+
   def start_link(room_code, pregame_state) do
     Logger.info("Starting Game.Server for room #{room_code}...")
     GenServer.start_link(__MODULE__, {room_code, pregame_state}, name: via_tuple(room_code))

@@ -8,6 +8,17 @@ defmodule Pregame.Server do
 
   # Client API - Room Management
 
+  # Child spec for DynamicSupervisor
+  # Uses :transient restart - only restart on abnormal exits, not normal shutdowns
+  def child_spec(room_code) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [room_code]},
+      restart: :transient,
+      type: :worker
+    }
+  end
+
   @doc """
   Starts a new pregame server for the given room code.
   Returns {:ok, pid} or {:error, reason}.
