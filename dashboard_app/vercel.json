@@ -1,0 +1,6 @@
+{
+  "env": {
+    "VITE_PHOENIX_WS_URL": "wss://your-backend.com/socket",
+    "VITE_PHOENIX_HTTP_URL": "https://your-backend.com/api"
+  }
+}

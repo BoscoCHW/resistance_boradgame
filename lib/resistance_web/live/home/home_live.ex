@@ -1,9 +1,12 @@
 defmodule ResistanceWeb.HomeLive do
   use ResistanceWeb, :live_view
   require Logger
+  alias Resistance.Analytics
 
   @impl true
   def mount(_params, session, socket) do
+    if connected?(socket), do: Analytics.increment_stat("site_visits")
+
     init_state =
       socket
       |> assign(:self, session["_csrf_token"])
@@ -76,6 +79,9 @@ defmodule ResistanceWeb.HomeLive do
             {:noreply, assign(socket, :form, to_form(param, errors: [name: {msg, []}]))}
 
           _ ->
+            if socket.assigns.is_creating do
+              Analytics.increment_stat("rooms_created")
+            end
             {:noreply, push_navigate(socket, to: "/lobby/#{normalized_code}")}
         end
 

@@ -20,6 +20,8 @@ defmodule Resistance.Application do
       {Registry, keys: :unique, name: Resistance.RoomRegistry},
       # DynamicSupervisor for spawning pregame/game processes
       {DynamicSupervisor, name: Resistance.RoomSupervisor, strategy: :one_for_one},
+      # Supervisor for async analytics tasks
+      {Task.Supervisor, name: Resistance.AnalyticsTaskSupervisor},
       # Start the Endpoint (http/https)
       ResistanceWeb.Endpoint
       # Pregame.Server and Game.Server now spawned dynamically per room

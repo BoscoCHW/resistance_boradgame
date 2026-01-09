@@ -11,6 +11,7 @@ defmodule ResistanceWeb.Endpoint do
     same_site: "Lax"
   ]
 
+  socket "/socket", ResistanceWeb.UserSocket, websocket: true, longpoll: false
   socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
 
   # Serve at "/" the static files from "priv/static" directory.
@@ -39,6 +40,17 @@ defmodule ResistanceWeb.Endpoint do
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
+
+  # CORS configuration for separate React dashboard deployment
+  plug CORSPlug,
+    origin: [
+      ~r/^https?:\/\/localhost:\d+$/,  # Development (any port)
+      ~r/^https:\/\/.*\.vercel\.app$/,  # Vercel deployments
+      ~r/^https:\/\/.*\.netlify\.app$/  # Netlify deployments
+      # Add your production dashboard domain here
+    ],
+    methods: ["GET", "OPTIONS"],
+    headers: ["Content-Type", "Authorization"]
 
   plug Plug.MethodOverride
   plug Plug.Head
