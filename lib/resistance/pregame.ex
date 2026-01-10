@@ -299,7 +299,9 @@ defmodule Pregame.Server do
 
     if all_ready do
       case Game.Server.start_link(state.room_code, state.players) do
-        {:ok, _pid} -> :ok
+        {:ok, _pid} ->
+          Resistance.Analytics.increment_stat("games_started")
+          :ok
         {:error, reason} ->
           Logger.error("Failed to start game: #{inspect(reason)}")
           broadcast(state.room_code, :error, "Failed to start game")

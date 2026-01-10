@@ -14,6 +14,14 @@ defmodule ResistanceWeb.Router do
     plug :accepts, ["json"]
   end
 
+  scope "/api", ResistanceWeb do
+    pipe_through :api
+
+    get "/analytics/stats", AnalyticsController, :stats
+    get "/analytics/health", AnalyticsController, :health
+    get "/rooms", RoomsController, :index
+  end
+
   scope "/", ResistanceWeb do
     pipe_through :browser
 

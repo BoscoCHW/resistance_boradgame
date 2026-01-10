@@ -281,13 +281,13 @@ defmodule Game.Server do
           %{new_state | stage: :end_game, winning_team: :bad}
           broadcast(state.room_code, :message, "Mordred wins!")
           broadcast(state.room_code, :update, new_state)
-          end_game(state.room_code)
+          end_game(state.room_code, :bad)
 
         num_bad_guys == 0 ->
           %{new_state | stage: :end_game, winning_team: :good}
           broadcast(state.room_code, :message, "Arthur wins!")
           broadcast(state.room_code, :update, new_state)
-          end_game(state.room_code)
+          end_game(state.room_code, :good)
 
         true ->
           new_state
@@ -421,7 +421,7 @@ defmodule Game.Server do
     if state.team_rejection_count >= 4 do
       broadcast(state.room_code, :message, {:server, "Bad guys win!"})
       broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :bad})
-      end_game(state.room_code)
+      end_game(state.room_code, :bad)
     else
       {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
@@ -449,12 +449,12 @@ defmodule Game.Server do
       {:end_game, :bad} ->
         broadcast(state.room_code, :message, {:server, "Mordred wins!"})
         broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :bad})
-        end_game(state.room_code)
+        end_game(state.room_code, :bad)
 
       {:end_game, :good} ->
         broadcast(state.room_code, :message, {:server, "Arthur wins!"})
         broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :good})
-        end_game(state.room_code)
+        end_game(state.room_code, :good)
 
       {:continue, _} ->
         {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
@@ -552,7 +552,12 @@ defmodule Game.Server do
   end
 
   # Terminate server when game ends
-  defp end_game(room_code) do
+  defp end_game(room_code, winning_team) do
+    case winning_team do
+      :good -> Resistance.Analytics.increment_stat("good_team_wins")
+      :bad -> Resistance.Analytics.increment_stat("bad_team_wins")
+      _ -> :ok
+    end
     GenServer.stop(via_tuple(room_code))
   end
 

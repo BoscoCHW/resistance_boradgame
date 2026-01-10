@@ -8,7 +8,7 @@ defmodule ResistanceWeb.Footer do
   def footer(assigns) do
     ~H"""
         <div class="avalon-footer">
-          <p class="dimmed"> &#169 2022 All Rights Reserved</p>
+          <p class="dimmed"> &#169 2026 All Rights Reserved</p>
         </div>
     """
   end

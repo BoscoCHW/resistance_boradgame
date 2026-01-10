@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) or Gemini when worki
 
 ## Project Overview
 
-This is an **Avalon/Resistance multiplayer party game** built with Phoenix LiveView. It's a real-time web application where 5 players compete in a social deduction game. The architecture uses **in-memory GenServer state management** (not database-backed) with Phoenix PubSub for real-time broadcasting.
+This is an **Avalon/Resistance multiplayer party game** built with Phoenix LiveView. It's a real-time web application where 5 players per room compete in a social deduction game. The architecture uses **multi-room in-memory GenServer state management** (not database-backed) with Phoenix PubSub for real-time broadcasting. **Unlimited concurrent rooms** can run simultaneously, each with isolated state using 6-character room codes.
 
 ## Essential Commands
 
@@ -74,23 +74,44 @@ mix deps.compile
 
 This application uses **GenServers as the primary state container**, NOT the database. Understanding this is critical:
 
-1. **Pregame.Server** (`lib/resistance/pregame.ex`)
-   - Singleton GenServer started by Application supervisor
-   - Manages lobby state (up to 5 players)
-   - Validates player names, tracks ready status
-   - Spawns Game.Server when 5 players ready
+1. **DynamicSupervisor** (`lib/resistance/application.ex`)
+   - `Resistance.RoomSupervisor` spawns and supervises room processes on-demand
+   - Strategy: `:one_for_one` - isolated failure handling per room
+   - Started by Application supervisor on boot
+   - Allows unlimited concurrent rooms
+
+2. **Registry** (`lib/resistance/application.ex`)
+   - `Resistance.RoomRegistry` provides process lookup by room code
+   - Keys: `{:pregame, room_code}` and `{:game, room_code}`
+   - Type: `keys: :unique` - one process per key
+   - Enables distributed process discovery
+
+3. **RoomCode** (`lib/resistance/room_code.ex`)
+   - Generates and validates 6-character alphanumeric codes
+   - Format: A-Z, 2-9 (excludes confusing characters like 0, O, 1, I)
+   - Functions: `generate()`, `validate(code)`, `normalize(code)`
+   - Used for Registry keys, PubSub topics, and URL paths
+
+4. **Pregame.Server** (`lib/resistance/pregame.ex`)
+   - Per-room GenServer spawned by DynamicSupervisor on room creation
+   - Manages lobby state (up to 5 players per room)
+   - Validates player names (per room, not globally)
+   - Tracks ready status and spawns Game.Server when 5 players ready
    - Uses `Process.flag(:trap_exit, true)` to detect game termination
+   - Registration: `{:via, Registry, {Resistance.RoomRegistry, {:pregame, room_code}}}`
+   - Inactivity cleanup: 3-minute timer → self-terminates if empty
 
-2. **Game.Server** (`lib/resistance/game.ex`)
-   - Dynamically spawned per game instance
-   - Manages ALL game state in-memory (players, votes, stage, outcomes)
+5. **Game.Server** (`lib/resistance/game.ex`)
+   - Per-room GenServer spawned by Pregame.Server when game starts
+   - Manages ALL game state in-memory (room_code, players, votes, stage, outcomes)
    - Self-terminates on game end via `GenServer.stop/1`
-   - Uses named process registration: `{:via, Registry, {Resistance.Registry, :game}}`
+   - Registration: `{:via, Registry, {Resistance.RoomRegistry, {:game, room_code}}}`
+   - Each room has completely isolated game state
 
-3. **Player Identification**
+6. **Player Identification**
    - CSRF tokens from Phoenix session used as player IDs
    - Stored in `socket.assigns.self` in LiveView
-   - Persists across LiveView navigation
+   - Persists across LiveView navigation within a room
 
 ### State Machine (Game Stages)
 
@@ -112,27 +133,34 @@ The game progresses through 6 distinct stages with automatic timer-based transit
 
 **Important**: Timers send messages to self (`:timer.send_after/3`), handled in `handle_info/2`. Missing votes auto-fill as `:assist` to prevent hanging.
 
-### Real-time Communication Flow
+### Real-time Communication Flow (Room-Scoped)
 
 ```
-Frontend (LiveView) → Backend (GenServer) → PubSub → All Clients
+Frontend (LiveView) → Backend (GenServer) → PubSub (Room Topic) → Room Clients
 
-Example:
+Example (for room ABC123):
 1. User clicks button → phx-click="vote_for_team"
-2. LiveView.handle_event → Game.Server.vote_for_team/2
-3. GenServer updates state
-4. GenServer broadcasts: Phoenix.PubSub.broadcast(Resistance.PubSub, "game", {:update, state})
-5. All LiveViews receive: handle_info({:update, state}, socket)
+2. LiveView.handle_event → Game.Server.vote_for_team(room_code, player_id, vote)
+3. GenServer updates state for that room
+4. GenServer broadcasts: Phoenix.PubSub.broadcast(Resistance.PubSub, "room:ABC123", {:update, state})
+5. All LiveViews subscribed to "room:ABC123" receive: handle_info({:update, state}, socket)
 6. Templates re-render with new state
+7. Players in other rooms (e.g., XYZ789) see nothing - complete isolation
 ```
+
+**Key Points:**
+- Each room has its own PubSub topic: `"room:{room_code}"`
+- LiveViews subscribe to specific room topic via `Pregame.Server.subscribe(room_code)` or `Game.Server.subscribe(room_code)`
+- Room isolation guarantees players only see updates from their room
+- Multiple concurrent games can run without interference
 
 ### Component Hierarchy
 
 ```
 LiveView Pages (lib/resistance_web/live/)
-├── HomeLive (/) - Menu, name entry modal
-├── LobbyLive (/lobby) - 5-player waiting room
-└── GameLive (/game) - Main game interface
+├── HomeLive (/) - Room creation/joining, name entry
+├── LobbyLive (/lobby/:room_code) - 5-player waiting room per room
+└── GameLive (/game/:room_code) - Main game interface per room
     ├── MainCard - Stage-specific central UI
     ├── SideBar - Player list, quest tracker, role display
     ├── ChatBox - Real-time messaging
@@ -140,6 +168,12 @@ LiveView Pages (lib/resistance_web/live/)
 ```
 
 **LiveComponents** (stateful): `SoundToggle`, `QuitButton`, `HowToPlayShortcut`
+
+**Routes:**
+- `/` - Home page (create or join room)
+- `/lobby/:room_code` - Lobby for specific room (e.g., `/lobby/ABC123`)
+- `/game/:room_code` - Active game for specific room (e.g., `/game/ABC123`)
+- Room codes are validated and normalized (uppercase) in `handle_params`
 
 ## Key Game Logic Rules
 
@@ -190,8 +224,10 @@ end
 
 ### Session and Routing
 - Player IDs derived from `_csrf_token` in session
-- Routes redirect to `/` if player not in game/lobby
-- No database persistence for game state
+- Routes use dynamic room codes: `/lobby/:room_code` and `/game/:room_code`
+- Room codes validated on `handle_params` - invalid codes redirect to `/`
+- Routes redirect to `/` if room doesn't exist or player not in room
+- No database persistence for game state - all state in room-specific GenServers
 
 ### Database Status
 PostgreSQL is configured but **NOT used for game state**. The database exists for:
@@ -207,9 +243,12 @@ PostgreSQL is configured but **NOT used for game state**. The database exists fo
 
 ### Deployment Considerations
 - Single-server architecture (no distributed GenServer)
-- Game state lost on server restart
+- Multi-room support allows unlimited concurrent games on single node
+- All room state lost on server restart (no persistence)
 - No persistence between sessions by design
-- PubSub configured for single-node (can be upgraded to Redis/cluster)
+- PubSub configured for single-node (can be upgraded to Redis/cluster for distributed deployment)
+- Room isolation ensures one room crash doesn't affect others
+- Inactivity cleanup (3-minute timer) prevents memory leaks from abandoned rooms
 
 ## Common Development Scenarios
 
@@ -222,16 +261,21 @@ PostgreSQL is configured but **NOT used for game state**. The database exists fo
 
 ### Modifying Player Actions
 1. Add event handler in `GameLive.handle_event/3`
-2. Call GenServer function via `Game.Server.your_function/2`
-3. Update GenServer state in `handle_call` or `handle_cast`
-4. Broadcast state change via `broadcast(:update, new_state)`
-5. Update template to show new UI element
+2. Get `room_code` from `socket.assigns.room_code`
+3. Call GenServer function via `Game.Server.your_function(room_code, player_id, ...)`
+4. Update GenServer state in `handle_call` or `handle_cast`
+5. Broadcast state change via `broadcast(room_code, :update, new_state)`
+6. Update template to show new UI element
+
+**Important:** All GenServer functions now require `room_code` as first parameter to target the correct room instance.
 
 ### Debugging Real-time Issues
 - Use `iex -S mix phx.server` for interactive debugging
 - Insert `IO.inspect(state, label: "Debug")` in GenServer callbacks
-- Check PubSub subscription: `Phoenix.PubSub.subscribers(Resistance.PubSub, "game")`
+- Check PubSub subscription for specific room: `Phoenix.PubSub.subscribers(Resistance.PubSub, "room:ABC123")`
+- Check all active rooms: `Registry.select(Resistance.RoomRegistry, [{{:"$1", :"$2", :"$3"}, [], [:"$1"]}])`
 - Monitor GenServer processes: `:observer.start()` in iex
+- Find room process: `Registry.lookup(Resistance.RoomRegistry, {:pregame, "ABC123"})` or `{:game, "ABC123"}`
 
 ## Configuration Notes
 
