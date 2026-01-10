@@ -19,6 +19,7 @@ defmodule ResistanceWeb.Router do
 
     get "/analytics/stats", AnalyticsController, :stats
     get "/analytics/health", AnalyticsController, :health
+    get "/rooms", RoomsController, :index
   end
 
   scope "/", ResistanceWeb do

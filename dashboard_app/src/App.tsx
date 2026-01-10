@@ -2,6 +2,7 @@ import React from 'react';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useAnalyticsStore } from './store/analyticsStore';
 import { StatCard } from './components/StatCard';
+import { RoomTable } from './components/RoomTable';
 
 function App() {
   useAnalytics(); // Connect to Phoenix Channel
@@ -79,6 +80,11 @@ function App() {
             icon="📊"
             color="border-indigo-500"
           />
+        </div>
+
+        {/* Room Monitoring Table */}
+        <div className="mb-8">
+          <RoomTable />
         </div>
 
         {/* Footer */}
