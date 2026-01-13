@@ -37,6 +37,8 @@ defmodule Game.Server do
   #     team_votes: %{player_id => :approve | :reject},      # a map of player's vote for the current team
   #     quest_votes: %{player_id => :assist | :sabotage}      # a map of team members vote for the current quest
   #     team_rejection_count: int
+  #     stage_end_time: int | nil,  # monotonic time in milliseconds when current stage ends
+  #     tick_ref: reference | nil   # reference for periodic tick timer
 
   # Client API - Room Management
 
@@ -184,11 +186,15 @@ defmodule Game.Server do
       team_rejection_count: 0,
       winning_team: nil,
       # timer reference for current stage
-      timer_ref: nil
+      timer_ref: nil,
+      # monotonic time when current stage ends
+      stage_end_time: nil,
+      # reference for periodic tick timer
+      tick_ref: nil
     }
 
-    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
-    {:ok, %{state | timer_ref: timer_ref}}
+    new_state = start_stage_timer(state, :init, 3000)
+    {:ok, new_state}
   end
 
   @impl true
@@ -304,7 +310,26 @@ defmodule Game.Server do
   end
 
   @impl true
+  def handle_info(:tick, state) do
+    # Broadcast current remaining time
+    broadcast_time_update(state)
+
+    # Schedule next tick if stage hasn't ended
+    remaining = state.stage_end_time - System.monotonic_time(:millisecond)
+    tick_ref = if remaining > 0 do
+      Process.send_after(self(), :tick, 1000)
+    else
+      nil
+    end
+
+    {:noreply, %{state | tick_ref: tick_ref}}
+  end
+
+  @impl true
   def handle_info({:end_stage, stage}, state) do
+    # Cancel tick timer when stage ends
+    if state.tick_ref, do: Process.cancel_timer(state.tick_ref)
+
     case stage do
       :init ->
         broadcast(state.room_code, :update, state)
@@ -361,8 +386,7 @@ defmodule Game.Server do
     new_king = find_king(new_state.players).name
     broadcast(state.room_code, :message, {:server, "#{new_king} is now king!"})
     broadcast(state.room_code, :update, new_state)
-    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :party_assembling})
-    %{new_state | timer_ref: timer_ref}
+    start_stage_timer(new_state, :party_assembling, 15000)
   end
 
   defp voting_stage(state) do
@@ -373,32 +397,28 @@ defmodule Game.Server do
       |> Map.put(:stage, :voting)
 
     broadcast(state.room_code, :update, new_state)
-    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :voting})
-    %{new_state | timer_ref: timer_ref}
+    start_stage_timer(new_state, :voting, 15000)
   end
 
   defp quest_stage(state) do
     Logger.log(:info, "quest_stage")
     new_state = Map.put(state, :stage, :quest)
     broadcast(state.room_code, :update, new_state)
-    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest})
-    %{new_state | timer_ref: timer_ref}
+    start_stage_timer(new_state, :quest, 15000)
   end
 
   defp quest_reveal_stage(state) do
     Logger.log(:info, "quest_reveal_stage")
     new_state = Map.put(state, :stage, :quest_reveal)
     broadcast(state.room_code, :update, new_state)
-    {:ok, timer_ref} = :timer.send_after(15000, self(), {:end_stage, :quest_reveal})
-    %{new_state | timer_ref: timer_ref}
+    start_stage_timer(new_state, :quest_reveal, 5000)
   end
 
   # called after king selects team
   defp clean_up(%{stage: :party_assembling} = state) do
     Logger.log(:info, "clean_up")
-    {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
 
-    %{
+    new_state = %{
       room_code: state.room_code,
       players:
         Enum.map(state.players, fn player ->
@@ -410,8 +430,12 @@ defmodule Game.Server do
       quest_votes: %{},
       team_rejection_count: state.team_rejection_count,
       winning_team: nil,
-      timer_ref: timer_ref
+      timer_ref: nil,
+      stage_end_time: nil,
+      tick_ref: nil
     }
+
+    start_stage_timer(new_state, :init, 3000)
   end
 
   # called when quest team is rejected
@@ -423,9 +447,7 @@ defmodule Game.Server do
       broadcast(state.room_code, :update, %{state | stage: :end_game, winning_team: :bad})
       end_game(state.room_code, :bad)
     else
-      {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
-
-      %{
+      new_state = %{
         room_code: state.room_code,
         players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
         quest_outcomes: state.quest_outcomes,
@@ -434,8 +456,12 @@ defmodule Game.Server do
         quest_votes: %{},
         team_rejection_count: state.team_rejection_count + 1,
         winning_team: nil,
-        timer_ref: timer_ref
+        timer_ref: nil,
+        stage_end_time: nil,
+        tick_ref: nil
       }
+
+      start_stage_timer(new_state, :init, 3000)
     end
   end
 
@@ -457,9 +483,7 @@ defmodule Game.Server do
         end_game(state.room_code, :good)
 
       {:continue, _} ->
-        {:ok, timer_ref} = :timer.send_after(3000, self(), {:end_stage, :init})
-
-        %{
+        new_state = %{
           room_code: state.room_code,
           players: Enum.map(state.players, fn player -> %Player{player | on_quest: false} end),
           quest_outcomes: new_quest_outcomes,
@@ -468,8 +492,12 @@ defmodule Game.Server do
           quest_votes: %{},
           team_rejection_count: state.team_rejection_count,
           winning_team: nil,
-          timer_ref: timer_ref
+          timer_ref: nil,
+          stage_end_time: nil,
+          tick_ref: nil
         }
+
+        start_stage_timer(new_state, :init, 3000)
     end
   end
 
@@ -522,6 +550,43 @@ defmodule Game.Server do
   end
 
   # Helper Functions
+
+  # Start a stage timer with periodic tick broadcasts
+  defp start_stage_timer(state, stage, duration_ms) do
+    # Cancel existing timers
+    if state.timer_ref, do: Process.cancel_timer(state.timer_ref)
+    if state.tick_ref, do: Process.cancel_timer(state.tick_ref)
+
+    # Calculate end time using monotonic time
+    stage_end_time = System.monotonic_time(:millisecond) + duration_ms
+
+    # Start main timer for stage transition
+    timer_ref = Process.send_after(self(), {:end_stage, stage}, duration_ms)
+
+    # Start periodic tick (every 1 second) for UI updates
+    tick_ref = Process.send_after(self(), :tick, 1000)
+
+    new_state = %{state |
+      stage_end_time: stage_end_time,
+      timer_ref: timer_ref,
+      tick_ref: tick_ref
+    }
+
+    # Broadcast initial time
+    broadcast_time_update(new_state)
+    new_state
+  end
+
+  # Broadcast current remaining time to all clients
+  defp broadcast_time_update(state) do
+    remaining_ms = max(0, state.stage_end_time - System.monotonic_time(:millisecond))
+    remaining_seconds = div(remaining_ms, 1000)
+
+    broadcast(state.room_code, :time_update, %{
+      stage: state.stage,
+      time_remaining: remaining_seconds
+    })
+  end
 
   defp via_tuple(room_code) do
     {:via, Registry, {Resistance.RoomRegistry, RoomCode.game_key(room_code)}}

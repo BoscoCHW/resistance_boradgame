@@ -12,26 +12,26 @@
 
     <div :if={@state} class="content">
 
-        <%= if @time_left == 0 || @time_left == nil do %>
+        <%= if @time_remaining == 0 || @time_remaining == nil do %>
             <.main_card_wait />
         <% else %>
             <%= case @state.stage do %>
                 <% :party_assembling -> %>
                     <.main_card_party
                         self={@self}
-                        time_left={@time_left}
+                        time_left={@time_remaining}
                     />
                 <% :voting -> %>
                     <.main_card_vote
                         self={@self}
-                        time_left={@time_left}
+                        time_left={@time_remaining}
                         team_votes={@state.team_votes}
                         on_vote="vote_for_team"
                     />
                 <% :quest -> %>
                     <.main_card_quest
                         self={@self}
-                        time_left={@time_left}
+                        time_left={@time_remaining}
                         quest_votes={@state.quest_votes}
                         on_vote="vote_for_quest"
                     />
@@ -39,7 +39,7 @@
                     <.main_card_quest_reveal
                         success={Enum.count(@state.quest_votes, fn {_, v} -> v == :sabotage end) == 0}
                         result={Enum.map(@state.quest_votes, fn {_, v} -> if v == :assist, do: "✅", else: "❌" end)}
-                        time_left={@time_left}
+                        time_left={@time_remaining}
                     />
                 <% _ ->  %>
                     <.main_card_wait />

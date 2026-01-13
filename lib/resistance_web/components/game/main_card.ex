@@ -14,7 +14,7 @@ defmodule ResistanceWeb.Game.MainCard do
         <% else %>
           <h3>Waiting for the King to choose the party members..</h3>
         <% end %>
-        <h3>Time Left: <%= @time_left %>s</h3>
+        <h3>Time Left: <%= @time_remaining %>s</h3>
       </div>
     """
   end
@@ -47,7 +47,7 @@ defmodule ResistanceWeb.Game.MainCard do
             </.button>
           </div>
         <% end %>
-        <h3>Time Left: <%= @time_left %>s</h3>
+        <h3>Time Left: <%= @time_remaining %>s</h3>
       </div>
     """
   end
@@ -80,7 +80,7 @@ defmodule ResistanceWeb.Game.MainCard do
         <% else %>
           <h3>Quest in progress..</h3>
         <% end %>
-        <h3>Time Left: <%= @time_left %>s</h3>
+        <h3>Time Left: <%= @time_remaining %>s</h3>
       </div>
     """
   end

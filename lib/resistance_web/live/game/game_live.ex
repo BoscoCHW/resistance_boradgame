@@ -11,8 +11,7 @@ defmodule ResistanceWeb.GameLive do
       |> assign(:form, to_form(%{"message" => ""}))
       |> assign(:form_key, 0)
       |> assign(:messages, [])
-      |> assign(:time_left, nil)
-      |> assign(:timer_ref, nil)
+      |> assign(:time_remaining, nil)
       |> assign(:muted, false)
       |> assign(:music_file, "game-music.mp3")}
   end
@@ -30,8 +29,7 @@ defmodule ResistanceWeb.GameLive do
             {:noreply, socket
               |> assign(:room_code, normalized_code)
               |> assign(:state, state)
-              |> assign(:self, get_self(token, state.players))
-              |> start_timer_for_stage(state.stage)}
+              |> assign(:self, get_self(token, state.players))}
         end
 
       {:error, _} ->
@@ -54,26 +52,14 @@ defmodule ResistanceWeb.GameLive do
       {:noreply, push_navigate(socket, to: "/")}
     end
 
-    new_state = if socket.assigns.state.stage != state.stage do
-      start_timer_for_stage(socket, state.stage)
-    else
-      socket
-    end
-
-    {:noreply, new_state
+    {:noreply, socket
       |> assign(:state, state)
       |> assign(:self, get_self(socket.assigns.self.id, state.players))}
   end
 
   @impl true
-  def handle_info(:tick, %{assigns: %{time_left: s}} = socket) do
-    case s do
-      s when s == nil or s == 0 ->
-        if socket.assigns.timer_ref, do: :timer.cancel(socket.assigns.timer_ref)
-        {:noreply, socket |> assign(:time_left, nil) |> assign(:timer_ref, nil)}
-      _ ->
-        {:noreply, socket |> assign(:time_left, s - 1)}
-    end
+  def handle_info({:time_update, %{time_remaining: seconds}}, socket) do
+    {:noreply, assign(socket, :time_remaining, seconds)}
   end
 
   @impl true
@@ -121,23 +107,5 @@ defmodule ResistanceWeb.GameLive do
 
   defp get_self(id, players) do
     Enum.find(players, fn p -> p.id == id end)
-  end
-
-  # Helper function to initialize timer based on current stage
-  # This ensures timer appears on both initial load and page refresh
-  defp start_timer_for_stage(socket, stage) do
-    # Cancel any existing timer first
-    if socket.assigns.timer_ref, do: :timer.cancel(socket.assigns.timer_ref)
-
-    case stage do
-      s when s in [:party_assembling, :voting, :quest] ->
-        {:ok, timer_ref} = :timer.send_interval(1000, self(), :tick)
-        socket |> assign(:time_left, 15) |> assign(:timer_ref, timer_ref)
-      :quest_reveal ->
-        {:ok, timer_ref} = :timer.send_interval(1000, self(), :tick)
-        socket |> assign(:time_left, 5) |> assign(:timer_ref, timer_ref)
-      _ ->
-        socket |> assign(:time_left, nil) |> assign(:timer_ref, nil)
-    end
   end
 end
